@@ -83,7 +83,85 @@ class Parser {
      */
     private AST parseExp() {
         AST exp = null;
+        Token token = in.readToken();
+        TokenType type = token.getType();
+        switch (type) {
+            case BOOL:
+            case INT:
+            case NULL:
+            case PRIM_FUN:
+            case VAR:
+            case OPERATOR:
+            case KEYWORD:
+                KeyWord key = (KeyWord) token;
+                if(key.getName().equals("if")){
+                    return parseIf();
+                }
+                if(key.getName().equals("let")){
+                    return parseLet();
+                }
+                if(key.getName().equals("map")){
+                    return parseMap();
+                }
+            case LEFT_PAREN:
+            case RIGHT_PAREN:
+            case LEFT_BRACK:
+            case RIGHT_BRACK:
+            case LEFT_BRACE:
+            case RIGHT_BRACE:
+            case COMMA:
+            case SEMICOLON:
+        }
         return exp;
+    }
+
+    private AST parseIf(){
+        AST t = parseExp();
+        Token key1 = in.readToken();
+        if (key1.getType().toString() != "then") {
+            error(key1, "then?");
+        }
+        AST c = parseExp();
+        Token key2 = in.readToken();
+        if (key2.getType().toString() != "else") {
+            error(key2, "else?");
+        }
+        AST a = parseExp();
+        return new If(t,c ,a);
+    }
+
+    private AST parseMap() {
+        Variable[] var = parseVars();
+        AST b = parseExp();
+        return new Map(var, b);
+    }
+    private Variable[] parseVars() {
+
+        ArrayList<Variable> vars = new ArrayList<Variable>();
+        Token t = in.readToken();
+        if (((Variable) t).getName().equals("to")) {
+            return new Variable[0];
+        }
+        do {
+            if (!(t instanceof Variable)) {
+                error(t, "variable");
+            }
+            vars.add(-1,(Variable)t);
+            t = in.readToken();
+            if (((Variable) t).getName().equals("to")) {
+                break;
+            }
+            if (t != Comma.ONLY) {
+                error(t, ",?");
+            }
+            t = in.readToken();
+        } while(true);
+        return vars.toArray(new Variable[0]);
+    }
+
+    private AST parseLet() {
+        AST let = null;
+        return let;
     }
 
     private AST parseFactor(Token token) {
@@ -98,6 +176,8 @@ class Parser {
         AST[] arr = new AST[args.size()];
         return arr;
     }
+
+
 
     private void error(Token token, String message) throws ParseException{
         System.err.println(token.toString() + " caused an error: " + message);
