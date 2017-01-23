@@ -1,7 +1,6 @@
 /**
  * Created by kerui_000 on 2017/1/18.
  */
-/** Parser for Assignment 2 */
 
 import java.io.*;
 import java.util.*;
@@ -10,10 +9,18 @@ import java.util.*;
  * class include a parse() method that will translate the program text in the input stream to the corresponding
  * AST assuming that the program text forms a syntactically valid Jam program.
  */
+
 class Parser {
 
     private Lexer in;
-
+    private KeyWord ifKey;
+    private KeyWord thenKey;
+    private KeyWord elseKey;
+    private KeyWord letKey;
+    private KeyWord inKey;
+    private KeyWord mapKey;
+    private KeyWord toKey;
+    private KeyWord defKey;
 
 
     Parser(Lexer i) {
@@ -28,7 +35,14 @@ class Parser {
     Lexer lexer() { return in; }
 
     private void initParser() {
-
+        ifKey = (KeyWord)in.wordTable.get("if");
+        thenKey = (KeyWord)in.wordTable.get("then");
+        elseKey = (KeyWord)in.wordTable.get("else");
+        letKey = (KeyWord)in.wordTable.get("let");
+        inKey = (KeyWord)in.wordTable.get("in");
+        mapKey = (KeyWord)in.wordTable.get("map");
+        toKey = (KeyWord)in.wordTable.get("to");
+        defKey = (KeyWord)in.wordTable.get(":=");
     }
 
     /** Parses the program text in the lexer bound to 'in' and returns the corresponding AST.
@@ -84,7 +98,7 @@ class Parser {
      * @return  the corresponding AST.
      */
     private AST parseExp() {
-        AST exp = null;
+        AST result = null;
         Token token = in.readToken();
         TokenType type = token.getType();
         switch (type) {
@@ -93,17 +107,18 @@ class Parser {
             case NULL:
             case PRIM_FUN:
             case VAR:
+                return parseVar(result,token);
             case OPERATOR:
             case KEYWORD:
                 KeyWord key = (KeyWord) token;
-                if(key.getName().equals("if")){
-                    return parseIf();
+                if(key == ifKey){
+                    return parseIf(key, token);
                 }
-                if(key.getName().equals("let")){
-                    return parseLet();
+                if(key == letKey){
+                    return parseLet(key, token);
                 }
-                if(key.getName().equals("map")){
-                    return parseMap();
+                if(key == mapKey){
+                    return parseMap(key, token);
                 }
             case LEFT_PAREN:
             case RIGHT_PAREN:
@@ -113,76 +128,152 @@ class Parser {
             case RIGHT_BRACE:
             case COMMA:
             case SEMICOLON:
+            default:
+                throw new
+                        ParseException("illegal token");
         }
-        return exp;
     }
 
-    private AST parseIf(){
+
+    private AST parseIf(KeyWord key, Token token){
         AST t = parseExp();
-        Token key1 = in.readToken();
-        if (key1.getType().toString() != "then") {
-            error(key1, "then?");
+        Token nextToken = in.peek();
+        if (nextToken instanceof KeyWord){
+            key = (KeyWord) nextToken;
+            if (key == thenKey){
+                in.readToken();
+            } else {
+                error(token,"expecting if, then");
+            }
+        } else {
+            error(token,"expecting a keyword");
         }
         AST c = parseExp();
-        Token key2 = in.readToken();
-        if (key2.getType().toString() != "else") {
-            error(key2, "else?");
+        nextToken = in.peek();
+        if (nextToken instanceof KeyWord){
+            key = (KeyWord) nextToken;
+            if (key == elseKey){
+                token = in.readToken();
+            } else {
+                error(token,"expecting if, then, else");
+            }
+        } else {
+            error(token,"expecting keyWord");
         }
         AST a = parseExp();
-        return new If(t,c ,a);
+        return new If(t,c,a);
     }
 
-    private AST parseMap() {
-        Variable[] var = parseVars();
-        AST b = parseExp();
-        return new Map(var, b);
+    private AST parseLet(KeyWord key, Token token) {
+        ArrayList<Def> defs = new ArrayList<Def>();
+        token = in.readToken();
+        if (token instanceof Variable){
+            while (token instanceof Variable) {
+                Variable var = (Variable) token;
+                token = in.readToken();
+                if (token instanceof KeyWord) {
+                    key =  (KeyWord) token;
+                    if (key == defKey){
+                        Def def = new Def(var,parseExp());
+                        defs.add(def);
+                        token = in.readToken();
+                        if (token instanceof SemiColon){
+                            token = in.readToken();
+                        } else {
+                            error(token,"expect ;");
+                        }
+                    } else {
+                        error(token,"expect :=");
+                    }
+                }
+            }
+            if (token instanceof KeyWord){
+                key = (KeyWord) token;
+                if (!(key == inKey)) {
+                    error(token,"expect let, in");
+                }
+            } else {
+                error(token,"expect in");
+            }
+            Def[] arr = new Def[defs.size()];
+            defs.toArray(arr);
+            return new Let(arr,parseExp());
+        }else error(token, "expect let");
+        return null;
     }
-    private Variable[] parseVars() {
 
+    private AST parseMap(KeyWord key, Token token) {
+        token = in.readToken();
         ArrayList<Variable> vars = new ArrayList<Variable>();
-        Token t = in.readToken();
-        if (((Variable) t).getName().equals("to")) {
-            return new Variable[0];
-        }
-        do {
-            if (!(t instanceof Variable)) {
-                error(t, "variable");
-            }
-            vars.add(-1,(Variable)t);
-            t = in.readToken();
-            if (((Variable) t).getName().equals("to")) {
-                break;
-            }
-            if (t != Comma.ONLY) {
-                error(t, ",?");
-            }
-            t = in.readToken();
-        } while(true);
-        return vars.toArray(new Variable[0]);
-    }
 
-    private AST parseLet() {
-        AST let = null;
-        return let;
+        return null;
+    }
+    private AST parseVar(AST result, Token token) {
+        AST term = parseTerm(token);
+        Token next = in.peek();
+        if (next instanceof Op){
+            token = in.readToken();
+            Op op = (Op) token;
+            if (op.isBinOp()){
+                AST exp = parseExp();
+                result = new BinOpApp(op,term,exp);
+            } else {
+                error(token,"expect term");
+            }
+        } else {
+            result = term;
+        }
+        return result;
+
     }
 
     private AST parseFactor(Token token) {
-        AST factor = null;
-        return factor;
+        AST exp = null;
+        if (token == LeftParen.ONLY){
+            exp = parseExp();
+            token = in.readToken();
+            if (token == RightParen.ONLY){
+                return exp;
+            } else {
+                error(token,"expect rightParen");
+                return exp = null;
+            }
+        } else if (token instanceof PrimFun) {
+            return (PrimFun) token;
+        } else if (token instanceof Variable) {
+            return (Variable) token;
+        } else{
+            error(token,"expect paren");
+            return exp;
+        }
     }
 
 
 
     private AST[] parseArgs() {
         ArrayList<AST> args = new ArrayList<AST>();
+        Token next = in.peek();
+        if (next != RightParen.ONLY){
+            args.add(parseExp());
+            next = in.peek();
+            while (next != RightParen.ONLY) {
+                if (next instanceof Comma){
+                    in.readToken();
+                }
+                args.add(parseExp());
+                next = in.peek();
+            }
+        }
+        in.readToken();
         AST[] arr = new AST[args.size()];
+        args.toArray(arr);
         return arr;
     }
 
 
 
     private void error(Token token, String message) throws ParseException{
-        System.err.println(token.toString() + " caused an error: " + message);
-        throw new ParseException(message);
+        System.out.println(in.readToken());
+        throw new ParseException(token + " + " + message);
     }
 }
