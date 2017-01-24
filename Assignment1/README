@@ -1,0 +1,11 @@
+Kerui Huang kh24@rice.edu S01182572
+Natalie Flores nef3@rice.edu S01195170
+
+# Program Organization
+Like the sample, we chose to write our parser in a procedural style. The Parser class has methods that parse instances in the JAM class for VAR and KEYWORD. The methods that handle this are named as such parse<Symbol>, ex: parseExp, parseIf, etc. Inside the method are cases for the <Symbol>, which are separated in if-else statements with returns at the end.
+
+# Testing Processes
+
+We used the initial tests in the given test file Assign1Test and continued to add to more tests in order to more comprehensively test our Parser class. We have tests for valid and invalid input programs. The valid programs test different branches of the grammar definition of a symbol. The invalid programs makes sure that ungrammatical programs are properly handled.
+For the valid input cases we compare a string representation of the actual output AST against the expected output AST string. For testing invalid inputs we ensured that a ParseException was thrown while parsing the input.
+We used the code coverage tool provided by Dr Java, which reports that we have 73% code coverage on our Parser class.
